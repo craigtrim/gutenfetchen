@@ -38,9 +38,7 @@ def clean_text(text: str) -> str:
     lines = _strip_illustrations(lines)
     lines = _strip_trailing_index(lines)
     lines = _strip_trailing_footnotes(lines)
-    lines = _strip_leading_blanks(lines)
-
-    return "".join(lines).rstrip("\n")
+    return "".join(lines)
 
 
 _BOILERPLATE_PREFIXES = (
@@ -171,7 +169,7 @@ def _strip_toc(lines: list[str]) -> list[str]:
 
     for j in range(toc_idx + 1, len(lines)):
         stripped = lines[j].strip().lower().rstrip(".")
-        if any(stripped.startswith(m) for m in _CHAPTER_START_MARKERS):
+        if stripped in _CHAPTER_START_MARKERS:
             return lines[:toc_idx] + lines[j + 1 :]
 
     return lines

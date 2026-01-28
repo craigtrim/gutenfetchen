@@ -3,6 +3,8 @@
 [![PyPI version](https://img.shields.io/pypi/v/gutenfetchen.svg)](https://pypi.org/project/gutenfetchen/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PyPI Downloads](https://static.pepy.tech/badge/gutenfetchen)](https://pepy.tech/projects/gutenfetchen)
+[![PyPI Downloads/Month](https://static.pepy.tech/badge/gutenfetchen/month)](https://pepy.tech/projects/gutenfetchen)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](https://mypy-lang.org/)
 
