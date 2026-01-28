@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from gutenfetch.cleaner import _strip_produced_by, _strip_toc, clean_file, clean_text
+from gutenfetchen.cleaner import _strip_produced_by, _strip_toc, clean_file, clean_text
 
 
 def test_clean_text_strips_start_and_end() -> None:

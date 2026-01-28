@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gutenfetch.downloader import download_book, download_books
-from gutenfetch.models import Author, Book
+from gutenfetchen.downloader import download_book, download_books
+from gutenfetchen.models import Author, Book
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def text_book() -> Book:
     )
 
 
-@patch("gutenfetch.downloader.requests.get")
+@patch("gutenfetchen.downloader.requests.get")
 def test_download_book(mock_get: MagicMock, text_book: Book, tmp_path: Path) -> None:
     mock_resp = MagicMock()
     mock_resp.text = "It was a dark and stormy night..."
@@ -37,7 +37,7 @@ def test_download_book(mock_get: MagicMock, text_book: Book, tmp_path: Path) -> 
     assert path.read_text() == "It was a dark and stormy night..."
 
 
-@patch("gutenfetch.downloader.requests.get")
+@patch("gutenfetchen.downloader.requests.get")
 def test_download_book_skips_existing(mock_get: MagicMock, text_book: Book, tmp_path: Path) -> None:
     existing = tmp_path / "joseph-conrad--heart-of-darkness.txt"
     existing.write_text("already here")
@@ -59,7 +59,7 @@ def test_download_book_no_text_url(tmp_path: Path) -> None:
         download_book(book, tmp_path)
 
 
-@patch("gutenfetch.downloader.requests.get")
+@patch("gutenfetchen.downloader.requests.get")
 def test_download_books_with_limit(mock_get: MagicMock, tmp_path: Path) -> None:
     mock_resp = MagicMock()
     mock_resp.text = "content"

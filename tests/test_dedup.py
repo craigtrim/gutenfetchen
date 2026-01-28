@@ -1,12 +1,12 @@
 """Tests for deduplication and author filtering."""
 
-from gutenfetch.dedup import (
+from gutenfetchen.dedup import (
     _normalize_title,
     deduplicate,
     filter_by_author,
     filter_has_text,
 )
-from gutenfetch.models import Author, Book
+from gutenfetchen.models import Author, Book
 
 
 def test_normalize_title_strips_subtitle() -> None:

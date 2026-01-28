@@ -1,6 +1,6 @@
 """Tests for data models."""
 
-from gutenfetch.models import Author, Book, SearchResult
+from gutenfetchen.models import Author, Book, SearchResult
 
 
 def test_author_display_name_last_first() -> None:

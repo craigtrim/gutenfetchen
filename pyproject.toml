@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "gutenfetch"
+name = "gutenfetchen"
 version = "1.0.0"
 description = "Download e-texts from Project Gutenberg"
 authors = ["Craig Trim <craigtrim@gmail.com>"]
 readme = "README.md"
 license = "MIT"
-packages = [{ include = "gutenfetch" }]
+packages = [{ include = "gutenfetchen" }]
 keywords = ["gutenberg", "ebooks", "text", "nlp", "corpus", "download"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -18,11 +18,11 @@ classifiers = [
 ]
 
 [tool.poetry.scripts]
-gutenfetch = "gutenfetch.cli:main"
+gutenfetchen = "gutenfetchen.cli:main"
 
 [tool.poetry.urls]
-Homepage = "https://github.com/craigtrim/gutenfetch"
-Repository = "https://github.com/craigtrim/gutenfetch"
+Homepage = "https://github.com/craigtrim/gutenfetchen"
+Repository = "https://github.com/craigtrim/gutenfetchen"
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -42,7 +42,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --cov=gutenfetch --cov-report=term-missing"
+addopts = "-v --cov=gutenfetchen --cov-report=term-missing"
 
 [tool.ruff]
 line-length = 100

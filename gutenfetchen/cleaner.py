@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -47,8 +48,6 @@ _BOILERPLATE_PREFIXES = (
     "e-text prepared by",
 )
 
-
-import re
 
 _TRANSCRIBER_PREFIXES: list[str] = [
     "transcriber's note",
@@ -225,7 +224,8 @@ def _strip_trailing_transcriber_note(lines: list[str]) -> list[str]:
 def _strip_illustrations(lines: list[str]) -> list[str]:
     """Remove single lines that are illustration markers like [Illustration ...]."""
     return [
-        line for line in lines
+        line
+        for line in lines
         if not (line.strip().lower().startswith("[illustration") and line.strip().endswith("]"))
     ]
 

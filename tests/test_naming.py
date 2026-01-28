@@ -1,7 +1,7 @@
 """Tests for filename generation."""
 
-from gutenfetch.models import Book
-from gutenfetch.naming import make_filename, slugify
+from gutenfetchen.models import Book
+from gutenfetchen.naming import make_filename, slugify
 
 
 def test_slugify_basic() -> None:

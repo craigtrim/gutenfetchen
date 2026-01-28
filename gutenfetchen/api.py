@@ -7,7 +7,7 @@ import time
 
 import requests
 
-from gutenfetch.models import Author, Book, SearchResult
+from gutenfetchen.models import Author, Book, SearchResult
 
 BASE_URL = "https://gutendex.com/books/"
 

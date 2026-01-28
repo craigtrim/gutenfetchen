@@ -6,9 +6,9 @@ from pathlib import Path
 
 import requests
 
-from gutenfetch.cleaner import clean_file
-from gutenfetch.models import Book
-from gutenfetch.naming import make_filename
+from gutenfetchen.cleaner import clean_file
+from gutenfetchen.models import Book
+from gutenfetchen.naming import make_filename
 
 
 def download_book(book: Book, output_dir: Path, *, clean: bool = True) -> tuple[Path, bool]:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from gutenfetch.models import Author, Book
+from gutenfetchen.models import Author, Book
 
 
 @pytest.fixture

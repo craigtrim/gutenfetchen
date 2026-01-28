@@ -1,4 +1,4 @@
-"""Command-line interface for gutenfetch."""
+"""Command-line interface for gutenfetchen."""
 
 from __future__ import annotations
 
@@ -6,15 +6,15 @@ import argparse
 import sys
 from pathlib import Path
 
-from gutenfetch.api import fetch_random, search_all_pages, search_books
-from gutenfetch.dedup import deduplicate, filter_by_author, filter_has_text
-from gutenfetch.downloader import download_books
+from gutenfetchen.api import fetch_random, search_all_pages, search_books
+from gutenfetchen.dedup import deduplicate, filter_by_author, filter_has_text
+from gutenfetchen.downloader import download_books
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser."""
     parser = argparse.ArgumentParser(
-        prog="gutenfetch",
+        prog="gutenfetchen",
         description="Download e-texts from Project Gutenberg",
     )
     parser.add_argument(
@@ -70,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Banner
     print("=" * 60)
-    print("  gutenfetch")
+    print("  gutenfetchen")
     print("=" * 60)
     if args.random:
         print(f"  mode        : random ({args.random} texts)")

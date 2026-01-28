@@ -1,4 +1,4 @@
-"""Data models for gutenfetch."""
+"""Data models for gutenfetchen."""
 
 from __future__ import annotations
 

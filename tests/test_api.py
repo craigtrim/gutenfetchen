@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from gutenfetch.api import _parse_book, _parse_response, search_books
+from gutenfetchen.api import _parse_book, _parse_response, search_books
 
 
 def test_parse_book(sample_api_response: dict) -> None:  # type: ignore[type-arg]
@@ -34,7 +34,7 @@ def test_parse_response_with_next() -> None:
     assert result.next_url == "https://gutendex.com/books/?page=2"
 
 
-@patch("gutenfetch.api.requests.get")
+@patch("gutenfetchen.api.requests.get")
 def test_search_books(mock_get: MagicMock, sample_api_response: dict) -> None:  # type: ignore[type-arg]
     mock_resp = MagicMock()
     mock_resp.json.return_value = sample_api_response

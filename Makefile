@@ -24,11 +24,11 @@ install-dev:
 	poetry install --with dev
 
 test:
-	poetry run pytest tests/ -v --cov=gutenfetch --cov-report=term-missing
+	poetry run pytest tests/ -v --cov=gutenfetchen --cov-report=term-missing
 
 lint:
 	poetry run ruff check .
-	poetry run mypy gutenfetch/
+	poetry run mypy gutenfetchen/
 
 format:
 	poetry run ruff format .
