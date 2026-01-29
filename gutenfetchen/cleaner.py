@@ -85,7 +85,7 @@ _UNDERSCORE_ITALIC_RE = re.compile(r"\b_((?:(?!_).)+?)_\b")
 #   2) [N]                      — bare numeric back-references
 _INLINE_FOOTNOTE_RE = re.compile(
     r"\[Footnote\s+\d+:\s*[^\]]*\]"  # [Footnote 1: explanatory text]
-    r"|\[\d+\]",                       # [1], [23], etc.
+    r"|\[\d+\]",  # [1], [23], etc.
     re.IGNORECASE,
 )
 

@@ -342,11 +342,7 @@ def test_strip_inline_footnotes_no_match() -> None:
 
 def test_clean_text_strips_italics_and_footnotes() -> None:
     """End-to-end: clean_text removes underscore italics and inline footnotes."""
-    text = (
-        "*** START ***\n"
-        "He read _Hamlet_[1] in the evening.\n"
-        "*** END ***\n"
-    )
+    text = "*** START ***\n" "He read _Hamlet_[1] in the evening.\n" "*** END ***\n"
     result = clean_text(text)
     assert result == "He read Hamlet in the evening.\n"
 
@@ -354,11 +350,7 @@ def test_clean_text_strips_italics_and_footnotes() -> None:
 def test_clean_text_normalizes_allcaps() -> None:
     """End-to-end: clean_text converts ALL CAPS headings to title case."""
     text = (
-        "*** START ***\n"
-        "Some prose.\n"
-        "THE COUNCIL OF ELROND\n"
-        "More prose.\n"
-        "*** END ***\n"
+        "*** START ***\n" "Some prose.\n" "THE COUNCIL OF ELROND\n" "More prose.\n" "*** END ***\n"
     )
     result = clean_text(text)
     assert "The Council Of Elrond\n" in result
