@@ -38,6 +38,34 @@ def filter_text_only(books: list[Book]) -> list[Book]:
     return [b for b in books if b.media_type == "Text"]
 
 
+_VOLUME_RE = re.compile(
+    r",?\s*(?:Vol(?:ume)?|v|Part)\.?\s*\d+(?:\s*\(of\s*\d+\))?\s*$",
+    re.IGNORECASE,
+)
+
+
+def filter_volumes(books: list[Book]) -> list[Book]:
+    """Remove volume splits when the whole book is also present.
+
+    Detects titles like 'Oliver Twist, Vol. 1 (of 3)' and drops them if
+    a non-volume edition ('Oliver Twist') exists in the list.  When only
+    volumes are available (no whole-book edition), they are kept.
+    """
+    whole_titles: set[str] = set()
+    for book in books:
+        if not _VOLUME_RE.search(book.title):
+            whole_titles.add(_normalize_title(book.title))
+
+    result: list[Book] = []
+    for book in books:
+        if _VOLUME_RE.search(book.title):
+            base = _normalize_title(_VOLUME_RE.sub("", book.title))
+            if base in whole_titles:
+                continue
+        result.append(book)
+    return result
+
+
 def _author_matches(book: Book, query_parts: set[str]) -> bool:
     """Check if any author on the book matches the query name parts."""
     for author in book.authors:
