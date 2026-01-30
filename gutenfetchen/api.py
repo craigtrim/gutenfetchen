@@ -2,14 +2,64 @@
 
 from __future__ import annotations
 
+import json
 import random
+import re
+import shutil
 import time
+from pathlib import Path
 
 import requests
+from rich.console import Console
 
 from gutenfetchen.models import Author, Book, SearchResult
 
+_console = Console()
+
 BASE_URL = "https://gutendex.com/books/"
+
+CACHE_DIR = Path(".gutenfetch_cache")
+
+
+def _cache_key(query: str, languages: str) -> str:
+    """Create a filesystem-safe cache directory name from a query."""
+    slug = re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")
+    return f"{slug}_{languages}"
+
+
+def _cache_path(query: str, languages: str, page: int) -> Path:
+    """Return the path for a cached page JSON file."""
+    return CACHE_DIR / _cache_key(query, languages) / f"page_{page}.json"
+
+
+def clear_cache(query: str | None = None, languages: str = "en") -> None:
+    """Remove cached catalog pages.
+
+    If *query* is given, only that query's cache is removed.
+    If *query* is None, the entire cache directory is removed.
+    """
+    if query is None:
+        if CACHE_DIR.exists():
+            shutil.rmtree(CACHE_DIR)
+    else:
+        target = CACHE_DIR / _cache_key(query, languages)
+        if target.exists():
+            shutil.rmtree(target)
+
+
+def _read_cache(query: str, languages: str, page: int) -> dict | None:  # type: ignore[type-arg]
+    """Return cached JSON data for a page, or None on miss."""
+    path = _cache_path(query, languages, page)
+    if path.exists():
+        return dict(json.loads(path.read_text(encoding="utf-8")))
+    return None
+
+
+def _write_cache(query: str, languages: str, page: int, data: dict) -> None:  # type: ignore[type-arg]
+    """Write a page's JSON response to the cache."""
+    path = _cache_path(query, languages, page)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
 def search_books(query: str, languages: str = "en") -> SearchResult:
@@ -20,19 +70,60 @@ def search_books(query: str, languages: str = "en") -> SearchResult:
     return _parse_response(resp.json())
 
 
-def search_all_pages(query: str, languages: str = "en") -> list[Book]:
-    """Fetch all pages for a query, following pagination."""
-    result = search_books(query, languages)
+def search_all_pages(query: str, languages: str = "en", *, refresh: bool = False) -> list[Book]:
+    """Fetch all pages for a query, following pagination.
+
+    Results are cached to ``.gutenfetch_cache/`` so repeat queries skip
+    the network.  Pass *refresh=True* to ignore the cache and re-fetch.
+    """
+    if refresh:
+        clear_cache(query, languages)
+
+    # --- Try loading from cache first ---
+    cached_books: list[Book] = []
+    page_num = 1
+    while True:
+        data = _read_cache(query, languages, page_num)
+        if data is None:
+            break
+        page = _parse_response(data)
+        cached_books.extend(page.books)
+        if not page.next_url:
+            # Cache is complete — all pages present
+            _console.print(
+                f"[dim]Loaded {len(cached_books)} cached results for "
+                f"'{query}' ({page_num} pages)[/dim]"
+            )
+            return cached_books
+        page_num += 1
+
+    # --- Cache miss or partial: fetch from network ---
+    # Start fresh from page 1 to ensure consistency
+    params = {"search": query, "languages": languages}
+    resp = requests.get(BASE_URL, params=params, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+    _write_cache(query, languages, 1, data)
+    result = _parse_response(data)
     all_books = list(result.books)
     next_url = result.next_url
+    page_num = 1
 
-    while next_url:
-        time.sleep(0.5)
-        resp = requests.get(next_url, timeout=30)
-        resp.raise_for_status()
-        page = _parse_response(resp.json())
-        all_books.extend(page.books)
-        next_url = page.next_url
+    with _console.status("[yellow]Fetching catalog pages...[/yellow]") as status:
+        while next_url:
+            page_num += 1
+            status.update(
+                f"[yellow]Fetching catalog page {page_num} "
+                f"({len(all_books)} books so far)...[/yellow]"
+            )
+            time.sleep(0.5)
+            resp = requests.get(next_url, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            _write_cache(query, languages, page_num, data)
+            page = _parse_response(data)
+            all_books.extend(page.books)
+            next_url = page.next_url
 
     return all_books
 

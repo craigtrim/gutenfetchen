@@ -43,6 +43,7 @@ settings.local.json
 pypi.key
 sandbox/
 stylometry/
+.gutenfetch_cache/
 gutenberg_texts/
 poetry.lock
 pypi.key
