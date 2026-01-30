@@ -14,7 +14,8 @@ from gutenfetchen.models import Author, Book
 _VALID_BOOK = (
     "Header\n"
     "*** START OF THE PROJECT GUTENBERG EBOOK TEST ***\n"
-    + "This is a line of prose.\n" * 100
+    + "This is a line of prose.\n"
+    * 100
     + "*** END OF THE PROJECT GUTENBERG EBOOK TEST ***\n"
     "Footer\n"
 )
@@ -103,11 +104,7 @@ def test_validate_content_rejects_no_start_marker() -> None:
 
 
 def test_validate_content_rejects_too_few_lines() -> None:
-    text = (
-        "*** START ***\n"
-        "One line.\n"
-        "*** END ***\n"
-    )
+    text = "*** START ***\n" "One line.\n" "*** END ***\n"
     with pytest.raises(ValueError, match="only 1 content lines"):
         _validate_content(text, "Tiny Book")
 

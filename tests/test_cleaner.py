@@ -6,14 +6,64 @@ from pathlib import Path
 
 from gutenfetchen.cleaner import (
     _normalize_allcaps_headings,
+    _strip_boilerplate_blocks,
+    _strip_decorative_lines,
     _strip_ebook_usage_notice,
     _strip_inline_footnotes,
+    _strip_internet_archive_lines,
+    _strip_multiline_brackets,
     _strip_produced_by,
     _strip_toc,
     _strip_underscore_italics,
+    _strip_url_or_email_lines,
     clean_file,
     clean_text,
 )
+
+# ---------------------------------------------------------------------------
+# _strip_boilerplate_blocks
+# ---------------------------------------------------------------------------
+
+
+def test_strip_boilerplate_blocks_removes_license() -> None:
+    """The full license block from boilerplate/license.txt is stripped."""
+    from gutenfetchen.cleaner import _BOILERPLATE_DIR
+
+    license_text = (_BOILERPLATE_DIR / "license.txt").read_text(encoding="utf-8")
+    text = "Some prose.\n\n" + license_text + "\nMore prose.\n"
+    result = _strip_boilerplate_blocks(text)
+    assert "Updated editions will replace" not in result
+    assert "FULL PROJECT GUTENBERG LICENSE" not in result
+    assert "Some prose.\n" in result
+    assert "More prose.\n" in result
+
+
+def test_strip_boilerplate_blocks_removes_usage_notice() -> None:
+    """The usage notice block from boilerplate/usage-notice.txt is stripped."""
+    text = (
+        "Body content.\n"
+        "\n"
+        "This ebook is for the use of anyone anywhere in the United States and\n"
+        "most other parts of the world at no cost and with almost no restrictions\n"
+        "whatsoever. You may copy it, give it away or re-use it under the terms\n"
+        "of the Project Gutenberg License included with this ebook or online\n"
+        "at www.gutenberg.org. If you are not located in the United States,\n"
+        "you will have to check the laws of the country where you are located\n"
+        "before using this eBook.\n"
+        "\n"
+        "More content.\n"
+    )
+    result = _strip_boilerplate_blocks(text)
+    assert "use of anyone anywhere" not in result
+    assert "Body content.\n" in result
+    assert "More content.\n" in result
+
+
+def test_strip_boilerplate_blocks_no_match() -> None:
+    """Text without boilerplate blocks is returned unchanged."""
+    text = "Just regular prose.\nNothing to strip.\n"
+    result = _strip_boilerplate_blocks(text)
+    assert result == text
 
 
 def test_clean_text_strips_start_and_end() -> None:
@@ -57,7 +107,7 @@ def test_clean_text_strips_produced_by() -> None:
         "*** END of this Project Gutenberg EBook ***\n"
     )
     result = clean_text(text)
-    assert result == "\nThen Marched the Brave...\n"
+    assert result == "Then Marched the Brave...\n"
 
 
 def test_strip_produced_by_multiline() -> None:
@@ -337,6 +387,83 @@ def test_strip_inline_footnotes_no_match() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _strip_multiline_brackets
+# ---------------------------------------------------------------------------
+
+
+def test_strip_multiline_brackets_illustration() -> None:
+    """A multi-line [Illustration: ...] block is removed."""
+    lines = [
+        "Some prose.\n",
+        "[Illustration: signed: Yours sincerely,\n",
+        "\n",
+        "Jerome K. Jerome]\n",
+        "More prose.\n",
+    ]
+    result = _strip_multiline_brackets(lines)
+    assert result == ["Some prose.\n", "More prose.\n"]
+
+
+def test_strip_multiline_brackets_two_lines() -> None:
+    """A bracket block spanning exactly two lines is removed."""
+    lines = [
+        "Before.\n",
+        "[Editor's note: this passage was\n",
+        "revised in the 1902 edition.]\n",
+        "After.\n",
+    ]
+    result = _strip_multiline_brackets(lines)
+    assert result == ["Before.\n", "After.\n"]
+
+
+def test_strip_multiline_brackets_exceeds_limit() -> None:
+    """A bracket block exceeding 5 continuation lines is kept."""
+    lines = ["[Start of a very long note\n"]
+    lines += [f"line {i}\n" for i in range(6)]
+    lines.append("end of note]\n")
+    lines.append("After.\n")
+    result = _strip_multiline_brackets(lines)
+    # Should not be removed — too many lines
+    assert result == lines
+
+
+def test_strip_multiline_brackets_single_line_ignored() -> None:
+    """A single-line [bracket] block is not touched (handled elsewhere)."""
+    lines = ["[Illustration: A cat]\n", "Prose.\n"]
+    result = _strip_multiline_brackets(lines)
+    assert result == lines
+
+
+def test_strip_multiline_brackets_no_closing() -> None:
+    """An opening [ with no closing ] within 5 lines is kept."""
+    lines = [
+        "[Unclosed bracket\n",
+        "Some text\n",
+        "More text\n",
+        "Even more\n",
+    ]
+    result = _strip_multiline_brackets(lines)
+    assert result == lines
+
+
+def test_clean_text_strips_multiline_brackets() -> None:
+    """End-to-end: clean_text removes multi-line bracket blocks."""
+    text = (
+        "*** START ***\n"
+        "Body text.\n"
+        "[Illustration: signed:\n"
+        "Author Name]\n"
+        "More body.\n"
+        "*** END ***\n"
+    )
+    result = clean_text(text)
+    assert "Illustration" not in result
+    assert "Author Name" not in result
+    assert "Body text.\n" in result
+    assert "More body.\n" in result
+
+
+# ---------------------------------------------------------------------------
 # Integration: clean_text includes new strip functions
 # ---------------------------------------------------------------------------
 
@@ -443,6 +570,130 @@ def test_clean_text_strips_ebook_usage_notice() -> None:
     assert "eBook is for the use of" not in result
     assert "Body text.\n" in result
     assert "More body.\n" in result
+
+
+# ---------------------------------------------------------------------------
+# _strip_decorative_lines
+# ---------------------------------------------------------------------------
+
+
+def test_strip_decorative_lines_finis() -> None:
+    """A standalone ***Finis*** line is removed."""
+    lines = ["Last paragraph.\n", "***Finis***\n", "\n"]
+    result = _strip_decorative_lines(lines)
+    assert result == ["Last paragraph.\n", "\n"]
+
+
+def test_strip_decorative_lines_with_spaces() -> None:
+    """Decorative lines with spaces inside asterisks are removed."""
+    lines = ["Body.\n", "*** THE END ***\n"]
+    result = _strip_decorative_lines(lines)
+    assert result == ["Body.\n"]
+
+
+def test_strip_decorative_lines_preserves_normal() -> None:
+    """Non-decorative lines are kept."""
+    lines = ["Regular text.\n", "More text.\n"]
+    result = _strip_decorative_lines(lines)
+    assert result == lines
+
+
+def test_strip_decorative_lines_preserves_bare_asterisks() -> None:
+    """A line that is only '***' (6 chars or fewer) is not removed."""
+    lines = ["***\n", "Body.\n"]
+    result = _strip_decorative_lines(lines)
+    assert result == lines
+
+
+# ---------------------------------------------------------------------------
+# _strip_url_or_email_lines
+# ---------------------------------------------------------------------------
+
+
+def test_strip_url_or_email_lines_http() -> None:
+    """Lines with http URLs are removed."""
+    lines = ["Body text.\n", "Visit http://example.com for more.\n", "More text.\n"]
+    result = _strip_url_or_email_lines(lines)
+    assert result == ["Body text.\n", "More text.\n"]
+
+
+def test_strip_url_or_email_lines_https() -> None:
+    """Lines with https URLs are removed."""
+    lines = ["See https://www.gutenberg.org/license\n", "Prose.\n"]
+    result = _strip_url_or_email_lines(lines)
+    assert result == ["Prose.\n"]
+
+
+def test_strip_url_or_email_lines_www() -> None:
+    """Lines with www. URLs (no scheme) are removed."""
+    lines = ["Check www.gutenberg.org for details.\n", "Content.\n"]
+    result = _strip_url_or_email_lines(lines)
+    assert result == ["Content.\n"]
+
+
+def test_strip_url_or_email_lines_email() -> None:
+    """Lines with email addresses are removed."""
+    lines = ["Contact admin@example.com for help.\n", "Story continues.\n"]
+    result = _strip_url_or_email_lines(lines)
+    assert result == ["Story continues.\n"]
+
+
+def test_strip_url_or_email_lines_no_match() -> None:
+    """Lines without URLs or emails are kept."""
+    lines = ["Just prose.\n", "More prose.\n"]
+    result = _strip_url_or_email_lines(lines)
+    assert result == lines
+
+
+# ---------------------------------------------------------------------------
+# _strip_internet_archive_lines
+# ---------------------------------------------------------------------------
+
+
+def test_strip_internet_archive_lines_basic() -> None:
+    """Lines mentioning Internet Archive are removed."""
+    lines = ["Body.\n", "Scanned by the Internet Archive in 2008.\n", "More body.\n"]
+    result = _strip_internet_archive_lines(lines)
+    assert result == ["Body.\n", "More body.\n"]
+
+
+def test_strip_internet_archive_lines_case_insensitive() -> None:
+    """Matching is case-insensitive."""
+    lines = ["From the INTERNET ARCHIVE.\n", "Content.\n"]
+    result = _strip_internet_archive_lines(lines)
+    assert result == ["Content.\n"]
+
+
+def test_strip_internet_archive_lines_no_match() -> None:
+    """Lines without Internet Archive are kept."""
+    lines = ["Regular text.\n"]
+    result = _strip_internet_archive_lines(lines)
+    assert result == lines
+
+
+def test_clean_text_strips_urls_and_internet_archive() -> None:
+    """End-to-end: clean_text removes URL and Internet Archive lines."""
+    text = (
+        "*** START ***\n"
+        "Body text.\n"
+        "Visit https://www.gutenberg.org for more.\n"
+        "Scanned by the Internet Archive.\n"
+        "More body.\n"
+        "*** END ***\n"
+    )
+    result = clean_text(text)
+    assert "gutenberg.org" not in result
+    assert "Internet Archive" not in result
+    assert "Body text.\n" in result
+    assert "More body.\n" in result
+
+
+def test_clean_text_strips_decorative_lines() -> None:
+    """End-to-end: clean_text removes ***Finis*** lines."""
+    text = "*** START ***\n" "Body text.\n" "***Finis***\n" "*** END ***\n"
+    result = clean_text(text)
+    assert "Finis" not in result
+    assert "Body text.\n" in result
 
 
 def test_clean_file(tmp_path: Path) -> None:

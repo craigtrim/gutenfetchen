@@ -5,10 +5,93 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+_BOILERPLATE_DIR = Path(__file__).parent / "boilerplate"
+
+
+def _load_boilerplate_blocks() -> list[str]:
+    """Load all .txt files from the boilerplate/ directory.
+
+    Each file contains a block of text that must be stripped from
+    downloaded books.  Returns a list of normalised block strings
+    (whitespace-collapsed, lowercased) used for fuzzy matching.
+    """
+    blocks: list[str] = []
+    if _BOILERPLATE_DIR.is_dir():
+        for path in sorted(_BOILERPLATE_DIR.glob("*.txt")):
+            blocks.append(path.read_text(encoding="utf-8"))
+    return blocks
+
+
+def _normalize_ws(text: str) -> str:
+    """Collapse all whitespace to single spaces and strip."""
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def _strip_boilerplate_blocks(text: str) -> str:
+    """Remove any block of text that matches a file in boilerplate/.
+
+    Matching is whitespace-insensitive and case-insensitive: both the
+    source text and the boilerplate templates are normalised before
+    comparison.  When a match is found the *original* lines covering
+    that block are removed.
+
+    This function runs on the raw text (before line splitting) and
+    must be the very first cleaning step.
+    """
+    for block in _load_boilerplate_blocks():
+        norm_block = _normalize_ws(block)
+        if not norm_block:
+            continue
+
+        norm_text = _normalize_ws(text)
+        if norm_block not in norm_text:
+            continue
+
+        # Walk the original text to find the span that matches.
+        # Build a mapping from normalised-char-index → original-char-index.
+        # Instead, use a simpler line-based approach: find the first line
+        # of the block in the original text, then consume forward.
+        block_lines = [ln.strip().lower() for ln in block.splitlines() if ln.strip()]
+        if not block_lines:
+            continue
+
+        text_lines = text.splitlines(keepends=True)
+        first_target = block_lines[0]
+
+        for i, line in enumerate(text_lines):
+            if first_target not in line.strip().lower():
+                continue
+
+            # Try to match all block lines starting from line i.
+            bi = 0  # index into block_lines
+            ti = i  # index into text_lines
+            while bi < len(block_lines) and ti < len(text_lines):
+                tl = text_lines[ti].strip().lower()
+                if not tl:
+                    ti += 1
+                    continue
+                if block_lines[bi] in tl:
+                    bi += 1
+                    ti += 1
+                else:
+                    break
+
+            if bi == len(block_lines):
+                # Matched the full block from line i to ti-1.
+                text = "".join(text_lines[:i] + text_lines[ti:])
+                break  # restart outer loop implicitly on next block
+
+    return text
+
 
 def clean_text(text: str) -> str:
     """Remove everything up to and including '*** START' line,
     and everything from '*** END' line onward."""
+
+    # First pass: strip known boilerplate blocks (coarse-grained,
+    # runs before line splitting so multi-line blocks are matched).
+    text = _strip_boilerplate_blocks(text)
+
     lines = text.splitlines(keepends=True)
 
     start_idx: int | None = None
@@ -39,6 +122,7 @@ def clean_text(text: str) -> str:
     # lines = _strip_trailing_divider(lines)
     lines = _strip_trailing_transcriber_note(lines)
     lines = _strip_illustrations(lines)
+    lines = _strip_multiline_brackets(lines)
     lines = _strip_trailing_index(lines)
     lines = _strip_trailing_footnotes(lines)
 
@@ -51,9 +135,16 @@ def clean_text(text: str) -> str:
     lines = _normalize_allcaps_headings(lines)
 
     lines = _strip_ebook_usage_notice(lines)
+    lines = _strip_decorative_lines(lines)
+    lines = _strip_url_or_email_lines(lines)
+    lines = _strip_internet_archive_lines(lines)
 
     # --- Final pass: must always run last ---
     lines = _strip_project_gutenberg_lines(lines)
+
+    # Strip leading/trailing blank lines left over after all removals
+    lines = _strip_leading_blanks(lines)
+    lines = _strip_trailing_blanks(lines)
 
     return "".join(lines)
 
@@ -286,6 +377,39 @@ def _strip_illustrations(lines: list[str]) -> list[str]:
     ]
 
 
+def _strip_multiline_brackets(lines: list[str]) -> list[str]:
+    """Remove multi-line bracketed blocks (up to 5 continuation lines).
+
+    Detects a line starting with ``[`` that does not close with ``]`` on the
+    same line, then looks ahead up to 5 lines for the closing ``]``.  If
+    found, all lines from the opener through the closer are removed.
+
+    This catches multi-line illustration captions, editor notes, etc.::
+
+        [Illustration: signed: Yours sincerely,
+
+        Jerome K. Jerome]
+    """
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if stripped.startswith("[") and not stripped.endswith("]"):
+            # Look ahead up to 5 lines for closing ]
+            found_end = False
+            for j in range(i + 1, min(i + 6, len(lines))):
+                if lines[j].rstrip().endswith("]"):
+                    # Skip lines i..j (inclusive)
+                    i = j + 1
+                    found_end = True
+                    break
+            if found_end:
+                continue
+        result.append(lines[i])
+        i += 1
+    return result
+
+
 def _strip_trailing_index(lines: list[str]) -> list[str]:
     """Remove an INDEX section and everything after it.
 
@@ -392,6 +516,41 @@ def _strip_inline_footnotes(lines: list[str]) -> list[str]:
     return [_INLINE_FOOTNOTE_RE.sub("", line) for line in lines]
 
 
+def _strip_decorative_lines(lines: list[str]) -> list[str]:
+    """Remove standalone decorative lines wrapped in asterisks.
+
+    Matches lines like ``***Finis***``, ``*** THE END ***``, etc. — any
+    single line whose content starts with ``***`` and ends with ``***``
+    (ignoring surrounding whitespace).
+    """
+    return [
+        line
+        for line in lines
+        if not (
+            line.strip().startswith("***")
+            and line.strip().endswith("***")
+            and len(line.strip()) > 6
+        )
+    ]
+
+
+_URL_OR_EMAIL_RE = re.compile(
+    r"https?://\S+"  # http:// or https:// URLs
+    r"|www\.\S+"  # www. URLs without scheme
+    r"|\S+@\S+\.\S+",  # email addresses
+)
+
+
+def _strip_url_or_email_lines(lines: list[str]) -> list[str]:
+    """Remove lines that contain a URL or email address."""
+    return [line for line in lines if not _URL_OR_EMAIL_RE.search(line)]
+
+
+def _strip_internet_archive_lines(lines: list[str]) -> list[str]:
+    """Remove lines that mention the Internet Archive."""
+    return [line for line in lines if "internet archive" not in line.lower()]
+
+
 def _strip_ebook_usage_notice(lines: list[str]) -> list[str]:
     """Remove the Gutenberg eBook usage/license notice block.
 
@@ -415,6 +574,14 @@ def _strip_leading_blanks(lines: list[str]) -> list[str]:
     for i, line in enumerate(lines):
         if line.strip():
             return lines[i:]
+    return lines
+
+
+def _strip_trailing_blanks(lines: list[str]) -> list[str]:
+    """Remove all trailing blank lines."""
+    for i in range(len(lines) - 1, -1, -1):
+        if lines[i].strip():
+            return lines[: i + 1]
     return lines
 
 
