@@ -6,9 +6,24 @@ import argparse
 import sys
 from pathlib import Path
 
+from rich.console import Console
+
 from gutenfetchen.api import fetch_random, search_all_pages, search_books
-from gutenfetchen.dedup import deduplicate, filter_by_author, filter_has_text, filter_text_only
+from gutenfetchen.dedup import (
+    deduplicate,
+    filter_by_author,
+    filter_has_text,
+    filter_text_only,
+    filter_volumes,
+)
 from gutenfetchen.downloader import download_books
+
+console = Console()
+
+
+def _cfg(label: str, value: object) -> str:
+    """Format a config line with dim label and bold value."""
+    return f"  [dim]{label:<14}:[/dim] [bold]{value}[/bold]"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -57,6 +72,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip stripping Project Gutenberg boilerplate from texts",
     )
+    parser.add_argument(
+        "--include-volumes",
+        action="store_true",
+        help="Include volume splits (e.g. Vol. 1, Vol. 2) even when the whole book exists",
+    )
+    parser.add_argument(
+        "--refresh-cache",
+        action="store_true",
+        help="Ignore cached catalog pages and re-fetch from the Gutendex API",
+    )
     return parser
 
 
@@ -69,40 +94,39 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("Provide a title, --author, or --random")
 
     # Banner
-    print("=" * 60)
-    print("  gutenfetchen")
-    print("=" * 60)
+    console.rule("[bold cyan]gutenfetchen[/bold cyan]", style="cyan")
     if args.random:
-        print(f"  mode        : random ({args.random} texts)")
+        console.print(_cfg("mode", f"random ({args.random} texts)"))
     elif args.title and not args.author:
-        print("  mode        : title search")
-        print(f"  title       : {args.title}")
+        console.print(_cfg("mode", "title search"))
+        console.print(_cfg("title", args.title))
     else:
-        print("  mode        : author search")
+        console.print(_cfg("mode", "author search"))
         if args.title:
-            print(f"  title       : {args.title}")
-        print(f"  author      : {args.author}")
-    print(f"  limit       : {args.limit or 'none'}")
-    print(f"  output dir  : {args.output_dir.resolve()}")
-    print(f"  dry run     : {args.dry_run}")
-    print(f"  clean texts : {not args.no_clean}")
-    print("=" * 60)
-    print()
+            console.print(_cfg("title", args.title))
+        console.print(_cfg("author", args.author))
+    console.print(_cfg("limit", args.limit or "none"))
+    console.print(_cfg("output dir", args.output_dir.resolve()))
+    console.print(_cfg("dry run", args.dry_run))
+    console.print(_cfg("clean texts", not args.no_clean))
+    console.print(_cfg("incl. volumes", args.include_volumes))
+    console.rule(style="cyan")
+    console.print()
 
     if args.random:
         # Random mode: fetch N random books
-        print(f"Fetching {args.random} random e-text(s)...")
+        console.print(f"[yellow]Fetching {args.random} random e-text(s)...[/yellow]")
         books = fetch_random(args.random)
     elif args.title and not args.author:
         # Title search: find best match
-        print(f"Searching for '{args.title}'...")
+        console.print(f"[yellow]Searching for '{args.title}'...[/yellow]")
         result = search_books(args.title)
         if not result.books:
-            print(f"No results for '{args.title}'")
+            console.print(f"[bold red]No results for '{args.title}'[/bold red]")
             return 1
         books = filter_text_only(filter_has_text(result.books))
         if not books:
-            print("No plain-text versions available")
+            console.print("[bold red]No plain-text versions available[/bold red]")
             return 1
         books = [books[0]]
     else:
@@ -110,27 +134,31 @@ def main(argv: list[str] | None = None) -> int:
         query = args.author
         if args.title:
             query = f"{args.author} {args.title}"
-        print(f"Searching for works by '{args.author}'...")
-        all_books = search_all_pages(query)
+        console.print(f"[yellow]Searching for works by '{args.author}'...[/yellow]")
+        all_books = search_all_pages(query, refresh=args.refresh_cache)
         books = filter_by_author(all_books, args.author)
         books = filter_text_only(filter_has_text(books))
         books = deduplicate(books)
+        if not args.include_volumes:
+            books = filter_volumes(books)
 
     if not books:
-        print("No matching books found")
+        console.print("[bold red]No matching books found[/bold red]")
         return 1
 
     display_books = books[: args.limit] if args.limit else books
 
     if args.dry_run:
-        print(f"Found {len(books)} book(s):")
+        console.print(f"Found [bold]{len(books)}[/bold] book(s):")
         for i, book in enumerate(display_books, 1):
             authors = ", ".join(a.display_name for a in book.authors)
-            print(f"  {i}. {book.title} — {authors} (id={book.id})")
+            console.print(f"  {i}. [bold]{book.title}[/bold] [dim]— {authors} (id={book.id})[/dim]")
         return 0
 
     paths = download_books(books, args.output_dir, limit=args.limit, clean=not args.no_clean)
-    print(f"\nDownloaded {len(paths)} text(s) to {args.output_dir}/")
+    console.print(
+        f"\n[bold green]Downloaded {len(paths)} text(s) to {args.output_dir}/[/bold green]"
+    )
     return 0
 
 

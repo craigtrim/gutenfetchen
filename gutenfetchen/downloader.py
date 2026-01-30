@@ -6,10 +6,13 @@ import re
 from pathlib import Path
 
 import requests
+from rich.console import Console
 
 from gutenfetchen.cleaner import clean_file
 from gutenfetchen.models import Book
 from gutenfetchen.naming import make_filename
+
+console = Console()
 
 # Media file extensions that indicate a file listing, not prose.
 _MEDIA_EXT_RE = re.compile(r"\.\s*(mp3|mp4|ogg|wav|flac|m4a|m3u|aac)\b", re.IGNORECASE)
@@ -31,9 +34,7 @@ def _validate_content(text: str, title: str) -> None:
 
     has_start = any("*** START" in line for line in lines)
     if not has_start:
-        raise ValueError(
-            f"Rejected '{title}': no *** START marker — not a standard Gutenberg text"
-        )
+        raise ValueError(f"Rejected '{title}': no *** START marker — not a standard Gutenberg text")
 
     # Count non-blank lines between START and END
     inside = False
@@ -101,10 +102,10 @@ def download_books(
             path, cached = download_book(book, output_dir, clean=clean)
             paths.append(path)
             if cached:
-                print(f"  Cached: {path.resolve()}")
+                console.print(f"  [dim]- Cached: {path.resolve()}[/dim]")
             else:
-                print(f"  Downloaded: {book.title}")
+                console.print(f"  [green]✓[/green] {book.title}")
         except (ValueError, requests.RequestException) as e:
-            print(f"  Skipping '{book.title}': {e}")
+            console.print(f"  [red]✗[/red] Skipping '{book.title}': {e}")
 
     return paths
