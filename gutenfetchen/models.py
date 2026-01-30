@@ -33,6 +33,7 @@ class Book:
     download_count: int = 0
     languages: list[str] = field(default_factory=list)
     subjects: list[str] = field(default_factory=list)
+    media_type: str = "Text"
 
     @property
     def text_url(self) -> str | None:

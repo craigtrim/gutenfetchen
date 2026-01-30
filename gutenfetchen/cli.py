@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from gutenfetchen.api import fetch_random, search_all_pages, search_books
-from gutenfetchen.dedup import deduplicate, filter_by_author, filter_has_text
+from gutenfetchen.dedup import deduplicate, filter_by_author, filter_has_text, filter_text_only
 from gutenfetchen.downloader import download_books
 
 
@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         if not result.books:
             print(f"No results for '{args.title}'")
             return 1
-        books = filter_has_text(result.books)
+        books = filter_text_only(filter_has_text(result.books))
         if not books:
             print("No plain-text versions available")
             return 1
@@ -113,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Searching for works by '{args.author}'...")
         all_books = search_all_pages(query)
         books = filter_by_author(all_books, args.author)
-        books = filter_has_text(books)
+        books = filter_text_only(filter_has_text(books))
         books = deduplicate(books)
 
     if not books:

@@ -5,6 +5,7 @@ from gutenfetchen.dedup import (
     deduplicate,
     filter_by_author,
     filter_has_text,
+    filter_text_only,
 )
 from gutenfetchen.models import Author, Book
 
@@ -49,6 +50,26 @@ def test_filter_by_author() -> None:
     result = filter_by_author(books, "joseph conrad")
     assert len(result) == 1
     assert result[0].id == 1
+
+
+def test_filter_text_only() -> None:
+    books = [
+        Book(
+            id=675,
+            title="American Notes",
+            formats={"text/plain; charset=utf-8": "https://example.com/675.txt"},
+            media_type="Text",
+        ),
+        Book(
+            id=9693,
+            title="American Notes",
+            formats={"text/plain; charset=us-ascii": "https://example.com/9693.txt"},
+            media_type="Sound",
+        ),
+    ]
+    result = filter_text_only(books)
+    assert len(result) == 1
+    assert result[0].id == 675
 
 
 def test_filter_has_text() -> None:

@@ -66,7 +66,7 @@ def fetch_random(n: int, languages: str = "en") -> list[Book]:
             continue
         result = _parse_response(resp.json())
         for book in result.books:
-            if book.text_url and book.id not in collected:
+            if book.text_url and book.media_type == "Text" and book.id not in collected:
                 collected[book.id] = book
                 if len(collected) >= n:
                     break
@@ -103,4 +103,5 @@ def _parse_book(item: dict) -> Book:  # type: ignore[type-arg]
         download_count=item.get("download_count", 0),
         languages=item.get("languages", []),
         subjects=item.get("subjects", []),
+        media_type=item.get("media_type", "Text"),
     )

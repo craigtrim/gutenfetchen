@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import requests
@@ -9,6 +10,54 @@ import requests
 from gutenfetchen.cleaner import clean_file
 from gutenfetchen.models import Book
 from gutenfetchen.naming import make_filename
+
+# Media file extensions that indicate a file listing, not prose.
+_MEDIA_EXT_RE = re.compile(r"\.\s*(mp3|mp4|ogg|wav|flac|m4a|m3u|aac)\b", re.IGNORECASE)
+
+# Minimum non-blank lines expected in a real book after START/END extraction.
+_MIN_PROSE_LINES = 50
+
+
+def _validate_content(text: str, title: str) -> None:
+    """Raise ValueError if *text* does not look like a plain-text book.
+
+    Checks applied (Issue #3):
+      1. Must contain a ``*** START`` marker (standard Gutenberg format).
+      2. Must have at least ``_MIN_PROSE_LINES`` non-blank lines between
+         the START and END markers.
+      3. Must not be predominantly media file references (.mp3, .mp4, etc.).
+    """
+    lines = text.splitlines()
+
+    has_start = any("*** START" in line for line in lines)
+    if not has_start:
+        raise ValueError(
+            f"Rejected '{title}': no *** START marker — not a standard Gutenberg text"
+        )
+
+    # Count non-blank lines between START and END
+    inside = False
+    content_lines = 0
+    for line in lines:
+        if "*** START" in line:
+            inside = True
+            continue
+        if "*** END" in line:
+            break
+        if inside and line.strip():
+            content_lines += 1
+
+    if content_lines < _MIN_PROSE_LINES:
+        raise ValueError(
+            f"Rejected '{title}': only {content_lines} content lines — likely not prose"
+        )
+
+    # Check for media file listings
+    media_lines = sum(1 for line in lines if _MEDIA_EXT_RE.search(line))
+    if media_lines > content_lines * 0.3:
+        raise ValueError(
+            f"Rejected '{title}': {media_lines} media file references — not a text edition"
+        )
 
 
 def download_book(book: Book, output_dir: Path, *, clean: bool = True) -> tuple[Path, bool]:
@@ -26,6 +75,9 @@ def download_book(book: Book, output_dir: Path, *, clean: bool = True) -> tuple[
     resp = requests.get(url, timeout=60)
     resp.raise_for_status()
     resp.encoding = "utf-8"
+
+    _validate_content(resp.text, book.title)
+
     filepath.write_text(resp.text, encoding="utf-8")
     if clean:
         clean_file(filepath)

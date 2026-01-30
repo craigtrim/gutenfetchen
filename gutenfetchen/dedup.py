@@ -28,6 +28,16 @@ def filter_has_text(books: list[Book]) -> list[Book]:
     return [b for b in books if b.text_url is not None]
 
 
+def filter_text_only(books: list[Book]) -> list[Book]:
+    """Keep only books whose media_type is 'Text'.
+
+    Rejects audio editions, video, datasets, and other non-prose entries
+    that may still have a text/plain format URL in the Gutendex API.
+    See Issue #3.
+    """
+    return [b for b in books if b.media_type == "Text"]
+
+
 def _author_matches(book: Book, query_parts: set[str]) -> bool:
     """Check if any author on the book matches the query name parts."""
     for author in book.authors:
