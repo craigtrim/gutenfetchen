@@ -6,6 +6,7 @@ from pathlib import Path
 
 from gutenfetchen.cleaner import (
     _normalize_allcaps_headings,
+    _strip_ebook_usage_notice,
     _strip_inline_footnotes,
     _strip_produced_by,
     _strip_toc,
@@ -354,6 +355,94 @@ def test_clean_text_normalizes_allcaps() -> None:
     )
     result = clean_text(text)
     assert "The Council Of Elrond\n" in result
+
+
+def test_strip_end_of_project() -> None:
+    """clean_text removes 'End of Project' line and everything after it."""
+    text = (
+        "*** START ***\n"
+        "Body text.\n"
+        "End of Project Gutenberg's Great Expectations\n"
+        "Some footer.\n"
+        "*** END ***\n"
+    )
+    result = clean_text(text)
+    assert "End of Project" not in result
+    assert "Body text.\n" in result
+
+
+def test_strip_end_of_the_project() -> None:
+    """clean_text removes 'End of the Project' variant."""
+    text = (
+        "*** START ***\n"
+        "Body text.\n"
+        "End of the Project Gutenberg EBook\n"
+        "More footer.\n"
+        "*** END ***\n"
+    )
+    result = clean_text(text)
+    assert "End of the Project" not in result
+    assert "Body text.\n" in result
+
+
+def test_strip_project_gutenberg_lines() -> None:
+    """clean_text removes any line containing 'Project Gutenberg'."""
+    text = (
+        "*** START ***\n"
+        "Body text.\n"
+        "This eBook is part of Project Gutenberg.\n"
+        "More body.\n"
+        "*** END ***\n"
+    )
+    result = clean_text(text)
+    assert "Project Gutenberg" not in result
+    assert "Body text.\n" in result
+    assert "More body.\n" in result
+
+
+# ---------------------------------------------------------------------------
+# _strip_ebook_usage_notice
+# ---------------------------------------------------------------------------
+
+
+def test_strip_ebook_usage_notice_basic() -> None:
+    """The standard eBook usage notice paragraph is removed."""
+    lines = [
+        "Some content.\n",
+        "This eBook is for the use of anyone anywhere in the United States and most\n",
+        "other parts of the world at no cost and with almost no restrictions\n",
+        "whatsoever.  You may copy it, give it away or re-use it under the terms of\n",
+        "www.gutenberg.org.  If you are not located in the United States, you'll have\n",
+        "to check the laws of the country where you are located before using this ebook.\n",
+        "\n",
+        "More content.\n",
+    ]
+    result = _strip_ebook_usage_notice(lines)
+    assert result == ["Some content.\n", "\n", "More content.\n"]
+
+
+def test_strip_ebook_usage_notice_not_present() -> None:
+    """Lines without the notice are returned unchanged."""
+    lines = ["Just regular text.\n", "More text.\n"]
+    result = _strip_ebook_usage_notice(lines)
+    assert result == lines
+
+
+def test_clean_text_strips_ebook_usage_notice() -> None:
+    """End-to-end: clean_text removes the eBook usage notice."""
+    text = (
+        "*** START ***\n"
+        "Body text.\n"
+        "This eBook is for the use of anyone anywhere in the United States and most\n"
+        "other parts of the world at no cost.\n"
+        "\n"
+        "More body.\n"
+        "*** END ***\n"
+    )
+    result = clean_text(text)
+    assert "eBook is for the use of" not in result
+    assert "Body text.\n" in result
+    assert "More body.\n" in result
 
 
 def test_clean_file(tmp_path: Path) -> None:

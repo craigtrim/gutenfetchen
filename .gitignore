@@ -42,6 +42,7 @@ Thumbs.db
 settings.local.json
 pypi.key
 sandbox/
+stylometry/
 gutenberg_texts/
 poetry.lock
 pypi.key

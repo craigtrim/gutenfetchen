@@ -33,7 +33,10 @@ def clean_text(text: str) -> str:
     lines = _strip_produced_by(lines)
     lines = _strip_toc(lines)
     lines = _strip_the_end(lines)
-    lines = _strip_trailing_divider(lines)
+    lines = _strip_end_of_project(lines)
+    # Issue #2: disabled — greedy match on `* * * * *` truncates legitimate
+    # content dividers mid-book (e.g. pg588 loses ~500 lines).
+    # lines = _strip_trailing_divider(lines)
     lines = _strip_trailing_transcriber_note(lines)
     lines = _strip_illustrations(lines)
     lines = _strip_trailing_index(lines)
@@ -46,6 +49,11 @@ def clean_text(text: str) -> str:
     lines = _strip_inline_footnotes(lines)
     # Normalize ALL CAPS headings to title case with blank-line isolation
     lines = _normalize_allcaps_headings(lines)
+
+    lines = _strip_ebook_usage_notice(lines)
+
+    # --- Final pass: must always run last ---
+    lines = _strip_project_gutenberg_lines(lines)
 
     return "".join(lines)
 
@@ -215,19 +223,44 @@ def _strip_the_end(lines: list[str]) -> list[str]:
     return lines
 
 
-def _strip_trailing_divider(lines: list[str]) -> list[str]:
-    """Remove a trailing asterisk divider and everything after it.
+_END_OF_PROJECT_PREFIXES = (
+    "end of project",
+    "end of the project",
+)
 
-    Scans the last 1000 lines for a line composed solely of asterisks and
-    whitespace. If found, truncates that line and everything below it.
+
+def _strip_end_of_project(lines: list[str]) -> list[str]:
+    """Remove a standalone 'End of Project' line and everything after it.
+
+    Matches lines starting with 'End of Project' or 'End of the Project'
+    (case-insensitive). Scans the last 1000 lines backward.
     """
     total = len(lines)
     start = max(0, total - 1000)
     for i in range(total - 1, start - 1, -1):
-        stripped = lines[i].strip()
-        if stripped and _ASTERISK_DIVIDER_RE.match(stripped):
+        lower = lines[i].strip().lower()
+        if any(lower.startswith(p) for p in _END_OF_PROJECT_PREFIXES):
             return lines[:i]
     return lines
+
+
+# Issue #2: disabled — greedy match on `* * * * *` truncates legitimate
+# content dividers mid-book (e.g. pg588 loses ~500 lines). The *** END
+# marker and _strip_project_gutenberg_lines catch-all now handle this.
+#
+# def _strip_trailing_divider(lines: list[str]) -> list[str]:
+#     """Remove a trailing asterisk divider and everything after it.
+#
+#     Scans the last 1000 lines for a line composed solely of asterisks and
+#     whitespace. If found, truncates that line and everything below it.
+#     """
+#     total = len(lines)
+#     start = max(0, total - 1000)
+#     for i in range(total - 1, start - 1, -1):
+#         stripped = lines[i].strip()
+#         if stripped and _ASTERISK_DIVIDER_RE.match(stripped):
+#             return lines[:i]
+#     return lines
 
 
 def _strip_trailing_transcriber_note(lines: list[str]) -> list[str]:
@@ -359,12 +392,40 @@ def _strip_inline_footnotes(lines: list[str]) -> list[str]:
     return [_INLINE_FOOTNOTE_RE.sub("", line) for line in lines]
 
 
+def _strip_ebook_usage_notice(lines: list[str]) -> list[str]:
+    """Remove the Gutenberg eBook usage/license notice block.
+
+    Detects a paragraph starting with 'This eBook is for the use of anyone
+    anywhere' and removes it through the end of that paragraph (next blank
+    line or end of file).
+    """
+    trigger = "this ebook is for the use of anyone anywhere"
+    for i, line in enumerate(lines):
+        if line.strip().lower().startswith(trigger):
+            # Find end of paragraph (next blank line or EOF)
+            end = i + 1
+            while end < len(lines) and lines[end].strip():
+                end += 1
+            return lines[:i] + lines[end:]
+    return lines
+
+
 def _strip_leading_blanks(lines: list[str]) -> list[str]:
     """Remove all leading blank lines."""
     for i, line in enumerate(lines):
         if line.strip():
             return lines[i:]
     return lines
+
+
+def _strip_project_gutenberg_lines(lines: list[str]) -> list[str]:
+    """Remove any line that contains 'Project Gutenberg' (case-insensitive).
+
+    This is a catch-all safety net for residual boilerplate that survives
+    earlier, more targeted stripping passes.  It MUST always run last in
+    the ``clean_text`` pipeline so it never masks a bug in an upstream step.
+    """
+    return [line for line in lines if "project gutenberg" not in line.lower()]
 
 
 def clean_file(filepath: Path) -> None:
