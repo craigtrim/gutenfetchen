@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gutenfetchen"
-version = "1.2.0"
+version = "1.2.1"
 description = "Download e-texts from Project Gutenberg"
 authors = ["Craig Trim <craigtrim@gmail.com>"]
 readme = "README.md"
@@ -43,7 +43,8 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --cov=gutenfetchen --cov-report=term-missing"
+addopts = "-v --cov=gutenfetchen --cov-report=term-missing -m 'not integration'"
+markers = ["integration: live API tests (deselected by default, run with -m integration)"]
 
 [tool.ruff]
 line-length = 100

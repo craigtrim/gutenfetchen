@@ -7,6 +7,7 @@ import random
 import re
 import shutil
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import requests
@@ -128,13 +129,30 @@ def search_all_pages(query: str, languages: str = "en", *, refresh: bool = False
     return all_books
 
 
-def fetch_random(n: int, languages: str = "en") -> list[Book]:
+def _get_with_retries(url: str, params: dict, retries: int = 3, timeout: int = 30) -> requests.Response:
+    """GET with retry on timeout/connection errors."""
+    for attempt in range(retries):
+        try:
+            resp = requests.get(url, params=params, timeout=timeout)
+            return resp
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+            if attempt == retries - 1:
+                raise
+            time.sleep(2 ** attempt)
+    raise requests.exceptions.ConnectionError("unreachable")  # pragma: no cover
+
+
+def fetch_random(
+    n: int,
+    languages: str = "en",
+    on_progress: Callable[[int, int], None] | None = None,
+) -> list[Book]:
     """Fetch n random English books with plain text available."""
     # Gutendex supports sorting by random via the `sort` param is not available,
     # but we can grab a few pages from random offsets and sample from them.
     # First, get total count of English books with text.
     params = {"languages": languages, "mime_type": "text/plain"}
-    resp = requests.get(BASE_URL, params=params, timeout=30)
+    resp = _get_with_retries(BASE_URL, params)
     resp.raise_for_status()
     data = resp.json()
     total = data.get("count", 0)
@@ -151,7 +169,11 @@ def fetch_random(n: int, languages: str = "en") -> list[Book]:
         page = random.randint(1, max_page)
         params_page = {"languages": languages, "mime_type": "text/plain", "page": str(page)}
         time.sleep(0.5)
-        resp = requests.get(BASE_URL, params=params_page, timeout=30)
+        try:
+            resp = _get_with_retries(BASE_URL, params_page)
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+            attempts += 1
+            continue
         if resp.status_code != 200:
             attempts += 1
             continue
@@ -159,6 +181,8 @@ def fetch_random(n: int, languages: str = "en") -> list[Book]:
         for book in result.books:
             if book.text_url and book.media_type == "Text" and book.id not in collected:
                 collected[book.id] = book
+                if on_progress:
+                    on_progress(len(collected), n)
                 if len(collected) >= n:
                     break
         attempts += 1

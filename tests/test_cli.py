@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from gutenfetchen.cli import build_parser, main
@@ -92,7 +93,10 @@ def test_main_random(mock_fetch: MagicMock, mock_download: MagicMock) -> None:
     result = main(["--random", "3"])
 
     assert result == 0
-    mock_fetch.assert_called_once_with(3)
+    mock_fetch.assert_called_once()
+    args, kwargs = mock_fetch.call_args
+    assert args == (3,)
+    assert "on_progress" in kwargs
 
 
 @patch("gutenfetchen.cli.fetch_random")
@@ -110,3 +114,82 @@ def test_main_random_dry_run(mock_fetch: MagicMock) -> None:
     result = main(["--random", "1", "--dry-run"])
 
     assert result == 0
+
+
+# --- clean subcommand tests ---
+
+_GUTENBERG_TEXT = (
+    "The Project Gutenberg EBook of Test\n"
+    "\n"
+    "*** START OF THE PROJECT GUTENBERG EBOOK ***\n"
+    "\n"
+    "Body text line one.\n"
+    "Body text line two.\n"
+    "\n"
+    "*** END OF THE PROJECT GUTENBERG EBOOK ***\n"
+    "\n"
+    "End of Project Gutenberg\n"
+)
+
+
+def test_clean_single_file(tmp_path: Path) -> None:
+    f = tmp_path / "test.txt"
+    f.write_text(_GUTENBERG_TEXT, encoding="utf-8")
+
+    result = main(["clean", str(f)])
+
+    assert result == 0
+    cleaned = f.read_text(encoding="utf-8")
+    assert "Project Gutenberg" not in cleaned
+    assert "Body text line one." in cleaned
+
+
+def test_clean_directory(tmp_path: Path) -> None:
+    for name in ["a.txt", "b.txt"]:
+        (tmp_path / name).write_text(_GUTENBERG_TEXT, encoding="utf-8")
+    (tmp_path / "readme.md").write_text("# Not a text file\n")
+
+    result = main(["clean", str(tmp_path)])
+
+    assert result == 0
+    for name in ["a.txt", "b.txt"]:
+        cleaned = (tmp_path / name).read_text(encoding="utf-8")
+        assert "Project Gutenberg" not in cleaned
+        assert "Body text" in cleaned
+    assert (tmp_path / "readme.md").read_text() == "# Not a text file\n"
+
+
+def test_clean_dry_run(tmp_path: Path) -> None:
+    f = tmp_path / "test.txt"
+    f.write_text(_GUTENBERG_TEXT, encoding="utf-8")
+
+    result = main(["clean", "--dry-run", str(f)])
+
+    assert result == 0
+    assert f.read_text(encoding="utf-8") == _GUTENBERG_TEXT
+
+
+def test_clean_nonexistent_path() -> None:
+    result = main(["clean", "/nonexistent/path.txt"])
+    assert result == 1
+
+
+def test_clean_empty_directory(tmp_path: Path) -> None:
+    result = main(["clean", str(tmp_path)])
+    assert result == 1
+
+
+def test_clean_idempotent(tmp_path: Path) -> None:
+    """Cleaning an already-clean text should not alter it."""
+    f = tmp_path / "test.txt"
+    f.write_text(_GUTENBERG_TEXT, encoding="utf-8")
+
+    # First pass: raw → clean
+    main(["clean", str(f)])
+    after_first = f.read_text(encoding="utf-8")
+
+    # Second pass: clean → should be identical
+    main(["clean", str(f)])
+    after_second = f.read_text(encoding="utf-8")
+
+    assert after_first == after_second

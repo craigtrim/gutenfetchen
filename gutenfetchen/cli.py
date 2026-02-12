@@ -9,6 +9,7 @@ from pathlib import Path
 from rich.console import Console
 
 from gutenfetchen.api import fetch_random, search_all_pages, search_books
+from gutenfetchen.cleaner import clean_file
 from gutenfetchen.dedup import (
     deduplicate,
     filter_by_author,
@@ -19,6 +20,8 @@ from gutenfetchen.dedup import (
 from gutenfetchen.downloader import download_books
 
 console = Console()
+
+_SUBCOMMANDS = {"clean"}
 
 
 def _cfg(label: str, value: object) -> str:
@@ -31,6 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gutenfetchen",
         description="Download e-texts from Project Gutenberg",
+        epilog="subcommands:\n  clean    Strip Gutenberg boilerplate from existing files"
+        " (run 'gutenfetchen clean -h')",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "title",
@@ -85,8 +91,74 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Main entry point for the CLI."""
+def _build_clean_parser() -> argparse.ArgumentParser:
+    """Build the argument parser for the ``clean`` subcommand."""
+    parser = argparse.ArgumentParser(
+        prog="gutenfetchen clean",
+        description="Strip Project Gutenberg boilerplate from existing text files",
+    )
+    parser.add_argument(
+        "paths",
+        nargs="+",
+        type=Path,
+        help="File(s) or directory(ies) to clean (directories are scanned for *.txt files)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview files that would be cleaned without modifying them",
+    )
+    return parser
+
+
+def _main_clean(argv: list[str]) -> int:
+    """Handle the ``clean`` subcommand."""
+    parser = _build_clean_parser()
+    args = parser.parse_args(argv)
+
+    # Resolve paths: expand directories to *.txt files
+    files: list[Path] = []
+    for p in args.paths:
+        if p.is_dir():
+            files.extend(sorted(p.glob("*.txt")))
+        elif p.is_file():
+            files.append(p)
+        else:
+            console.print(f"[bold red]Not found: {p}[/bold red]")
+            return 1
+
+    if not files:
+        console.print("[bold red]No .txt files found in the given path(s)[/bold red]")
+        return 1
+
+    # Banner
+    console.rule("[bold cyan]gutenfetchen clean[/bold cyan]", style="cyan")
+    console.print(_cfg("files", len(files)))
+    console.print(_cfg("dry run", args.dry_run))
+    console.rule(style="cyan")
+    console.print()
+
+    if args.dry_run:
+        console.print(f"Would clean [bold]{len(files)}[/bold] file(s):")
+        for f in files:
+            console.print(f"  [dim]-[/dim] {f}")
+        return 0
+
+    cleaned = 0
+    for f in files:
+        try:
+            clean_file(f)
+            console.print(f"  [green]\u2713[/green] {f}")
+            cleaned += 1
+        except Exception as e:  # noqa: BLE001
+            console.print(f"  [red]\u2717[/red] {f}: {e}")
+
+    console.print(f"\n[bold green]Cleaned {cleaned} file(s)[/bold green]")
+    return 0
+
+
+def _main_download(argv: list[str]) -> int:
+    """Handle the default search-and-download behaviour."""
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -114,9 +186,14 @@ def main(argv: list[str] | None = None) -> int:
     console.print()
 
     if args.random:
-        # Random mode: fetch N random books
-        console.print(f"[yellow]Fetching {args.random} random e-text(s)...[/yellow]")
-        books = fetch_random(args.random)
+        # Random mode: fetch N random books with live counter
+        with console.status("", spinner="dots") as status:
+
+            def _progress(found: int, target: int) -> None:
+                status.update(f"[yellow]Fetching random e-texts... {found} / {target}[/yellow]")
+
+            _progress(0, args.random)
+            books = fetch_random(args.random, on_progress=_progress)
     elif args.title and not args.author:
         # Title search: find best match
         console.print(f"[yellow]Searching for '{args.title}'...[/yellow]")
@@ -160,6 +237,21 @@ def main(argv: list[str] | None = None) -> int:
         f"\n[bold green]Downloaded {len(paths)} text(s) to {args.output_dir}/[/bold green]"
     )
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Main entry point for the CLI."""
+    args_list = argv if argv is not None else sys.argv[1:]
+
+    # Detect subcommand: check first positional (non-flag) argument.
+    for arg in args_list:
+        if arg.startswith("-"):
+            continue
+        if arg in _SUBCOMMANDS:
+            return _main_clean(args_list[args_list.index(arg) + 1 :])
+        break
+
+    return _main_download(args_list)
 
 
 if __name__ == "__main__":

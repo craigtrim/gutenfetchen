@@ -47,3 +47,8 @@ stylometry/
 gutenberg_texts/
 poetry.lock
 pypi.key
+data/ebook-index.csv
+data/blacklist.txt
+bin/
+data/
+

@@ -73,6 +73,16 @@ gutenfetchen --author "mark twain" --n 3 -o ./my_texts/
 gutenfetchen "moby dick" --no-clean
 ```
 
+**Clean existing files on disk:**
+
+```bash
+gutenfetchen clean ./gutenberg_texts/
+gutenfetchen clean file1.txt file2.txt
+gutenfetchen clean --dry-run ./gutenberg_texts/
+```
+
+The `clean` subcommand runs the same boilerplate-stripping pipeline used during download. It is idempotent — running it on already-clean texts leaves them unchanged.
+
 ## Options
 
 ```
